@@ -23,6 +23,7 @@ import org.openrewrite.Option;
 import org.openrewrite.Preconditions;
 import org.openrewrite.Recipe;
 import org.openrewrite.TreeVisitor;
+import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.JavaVisitor;
 import org.openrewrite.java.MethodMatcher;
@@ -32,7 +33,7 @@ import org.openrewrite.java.tree.J;
 
 import java.util.List;
 
-@Value
+@Getter
 @EqualsAndHashCode(callSuper = true)
 public class UseToList extends Recipe {
     private static final MethodMatcher STREAM_COLLECT = new MethodMatcher("java.util.stream.Stream collect(java.util.stream.Collector)");
@@ -40,12 +41,21 @@ public class UseToList extends Recipe {
     private static final MethodMatcher COLLECTORS_LIST = new MethodMatcher("java.util.stream.Collectors toList()");
     private static final String STREAM_STREAM = "java.util.stream.Stream";
 
-    @Option(displayName = "Also change `collect(Collectors.toList())`.",
+    @Option(displayName = "Whether to also change `collect(Collectors.toList())` (the default value is false).",
             description = "When set to `true` `collect(Collectors.toList())` gets changed as well,"
-                    + "changing implementation of List from modifiable to unmodifiable.",
+                    + "changing implementation of List from modifiable to unmodifiable (the default value is false).",
+            example = "true",
             required = false)
-    Boolean alsoChangeCollectorsToList;
+    @Nullable
+    boolean alsoChangeCollectorsToList;
 
+    public UseToList() {
+        this(false);
+    }
+
+    public UseToList(Boolean alsoChangeCollectorsToList) {
+        this.alsoChangeCollectorsToList = alsoChangeCollectorsToList;
+    }
 
     @Override
     public String getDisplayName() {

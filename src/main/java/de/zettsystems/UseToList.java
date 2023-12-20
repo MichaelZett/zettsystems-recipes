@@ -17,7 +17,6 @@ package de.zettsystems;
 
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.Value;
 import org.openrewrite.ExecutionContext;
 import org.openrewrite.Option;
 import org.openrewrite.Preconditions;
@@ -33,6 +32,9 @@ import org.openrewrite.java.tree.J;
 
 import java.util.List;
 
+/**
+ * Use toList() instead of collect(Collectors.toUnmodifiableList()).
+ */
 @Getter
 @EqualsAndHashCode(callSuper = true)
 public class UseToList extends Recipe {
@@ -41,6 +43,9 @@ public class UseToList extends Recipe {
     private static final MethodMatcher COLLECTORS_LIST = new MethodMatcher("java.util.stream.Collectors toList()");
     private static final String STREAM_STREAM = "java.util.stream.Stream";
 
+    /**
+     * Whether to also change `collect(Collectors.toList())` (the default value is false).
+     */
     @Option(displayName = "Whether to also change `collect(Collectors.toList())` (the default value is false).",
             description = "When set to `true` `collect(Collectors.toList())` gets changed as well,"
                     + "changing implementation of List from modifiable to unmodifiable (the default value is false).",
@@ -49,10 +54,18 @@ public class UseToList extends Recipe {
     @Nullable
     boolean alsoChangeCollectorsToList;
 
+    /**
+     * Use this to not change collect(Collectors.toList()).
+     */
     public UseToList() {
         this(false);
     }
 
+    /**
+     * Use this to also change collect(Collectors.toList()).
+     *
+     * @param alsoChangeCollectorsToList set to true to also change collect(Collectors.toList()).
+     */
     public UseToList(Boolean alsoChangeCollectorsToList) {
         this.alsoChangeCollectorsToList = alsoChangeCollectorsToList;
     }

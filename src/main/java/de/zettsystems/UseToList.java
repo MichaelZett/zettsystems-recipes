@@ -22,7 +22,6 @@ import org.openrewrite.Option;
 import org.openrewrite.Preconditions;
 import org.openrewrite.Recipe;
 import org.openrewrite.TreeVisitor;
-import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.JavaVisitor;
 import org.openrewrite.java.MethodMatcher;
@@ -51,7 +50,6 @@ public class UseToList extends Recipe {
                     + "changing implementation of List from modifiable to unmodifiable (the default value is false).",
             example = "true",
             required = false)
-    @Nullable
     boolean alsoChangeCollectorsToList;
 
     /**

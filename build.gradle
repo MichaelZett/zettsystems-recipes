@@ -1,0 +1,139 @@
+plugins {
+    id 'java-library'
+    id 'signing'
+    id 'maven-publish'
+    id 'com.github.ben-manes.versions' version "${benManesVersionsVersion}"
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+// Set as appropriate for your organization
+group = 'de.zettsystems'
+description = 'Rewrite recipes from zettsystems.'
+version = '0.1.0'
+
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
+
+dependencies {
+    implementation platform("org.openrewrite.recipe:rewrite-recipe-bom:${rewriteRecipeBomVersion}")
+    implementation 'org.openrewrite:rewrite-java'
+
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    runtimeOnly 'org.openrewrite:rewrite-java-8'
+    runtimeOnly 'org.openrewrite:rewrite-java-17'
+    runtimeOnly 'org.openrewrite:rewrite-java-21'
+    runtimeOnly "ch.qos.logback:logback-classic:${logbackVersion}"
+
+    testImplementation 'org.openrewrite:rewrite-test'
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitJupiterVersion}"
+
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}"
+    testRuntimeOnly "com.google.guava:guava:${guavaVersion}"
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << '-Xlint:deprecation'
+}
+
+// ------------------------------------------------------ dependency updates
+
+def depUpdateIsUnstable = { String version ->
+    def stableKeywords = ['RELEASE', 'FINAL', 'GA']
+    def stable = stableKeywords.any { version.toUpperCase().contains(it) }
+    def numericLooking = version ==~ /^[0-9,.v-]+(-r)?$/
+    return !stable && !numericLooking
+}
+def depUpdateIsMajorBump = { String current, String candidate ->
+    def cur = current.split(/[.\-]/, 2)[0]
+    def cand = candidate.split(/[.\-]/, 2)[0]
+    return cur.isInteger() && cand.isInteger() && cand.toInteger() > cur.toInteger()
+}
+dependencyUpdates {
+    rejectVersionIf { selection ->
+        def allowUnstable = project.hasProperty('unstable')
+        def allowMajor = project.hasProperty('major')
+        if (!allowUnstable
+                && depUpdateIsUnstable(selection.candidate.version)
+                && !depUpdateIsUnstable(selection.currentVersion)) {
+            return true
+        }
+        if (!allowMajor
+                && depUpdateIsMajorBump(selection.currentVersion, selection.candidate.version)) {
+            return true
+        }
+        return false
+    }
+}
+
+// ------------------------------------------------------ sign & publish
+
+def OSSRH_USERNAME = project.findProperty('OSSRH_USERNAME') ?: ''
+def OSSRH_PASSWORD = project.findProperty('OSSRH_PASSWORD') ?: ''
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = project.group.toString()
+            artifactId = project.name
+            version = project.version.toString()
+            from components.java
+            pom {
+                name = project.name
+                description = project.description
+                url = 'https://github.com/MichaelZett/zettsystems-recipes'
+                licenses {
+                    license {
+                        name = 'Apache-2.0'
+                        url = 'https://opensource.org/licenses/Apache-2.0'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'michaelzett'
+                        name = 'Michael Zoeller'
+                        organization = 'ZettSystems'
+                        organizationUrl = 'https://zettsystems.de/'
+                    }
+                }
+                scm {
+                    url = 'https://github.com/MichaelZett/zettsystems-recipes.git'
+                    connection = 'scm:git:git://github.com/MichaelZett/zettsystems-recipes.git'
+                    developerConnection = 'scm:git:git://github.com/MichaelZett/zettsystems-recipes.git'
+                }
+                issueManagement {
+                    url = 'https://github.com/MichaelZett/zettsystems-recipes/issues'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            url = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
+            credentials {
+                username = OSSRH_USERNAME
+                password = OSSRH_PASSWORD
+            }
+        }
+    }
+}
+
+signing {
+    useGpgCmd()
+    sign publishing.publications.maven
+}

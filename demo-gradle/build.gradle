@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id("org.openrewrite.rewrite") version("6.6.1")
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.junit.jupiter
+
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    implementation libs.guava
+
+    rewrite(platform("org.openrewrite.recipe:rewrite-recipe-bom:2.5.3"))
+    rewrite("org.openrewrite.recipe:rewrite-migrate-java")
+    rewrite("de.zettsystems:zettsystems-recipes:0.1.0")
+}
+
+rewrite {
+    activeRecipe("org.openrewrite.java.migrate.UpgradeToJava17")
+    activeRecipe("de.zettsystems.UseToList")
+    activeRecipe("de.zettsystems.UseToListTrue")
+}
+
+// Apply a specific Java toolchain to ease working on different environments.
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
+
+tasks.named('test') {
+    // Use JUnit Platform for unit tests.
+    useJUnitPlatform()
+}

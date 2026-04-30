@@ -1,43 +1,89 @@
-## Zettsystems-Recipes
-For now this is just 1 recipe for OpenRewrite: UseToList (instead of collect(Collectors.toUnmodifiableList())).
+# zettsystems-recipes
 
-## Local Publishing
-To do this on the command line, run:
+Custom OpenRewrite Recipe `UseToList` — ersetzt `collect(Collectors.toUnmodifiableList())` durch das modernere
+`Stream.toList()` (Java 16+).
+
+## Hintergrund
+
+Geschrieben 2023, als OpenRewrite für diese Migration noch keine Standard-Recipe im offiziellen Katalog hatte.
+Mittlerweile gibt es vergleichbare Migrationen im offiziellen Recipe-Set (
+`org.openrewrite.java.migrate.util.UseStreamToListNotCollect` u. ä.) — als Hands-on-Beispiel zur Recipe-Engine ist die
+Implementierung hier weiterhin nützlich.
+
+## Was die Recipe macht
+
+```java
+// vorher
+list.stream()
+    .
+
+filter(...)
+    .
+
+collect(Collectors.toUnmodifiableList());
+
+// nachher
+        list.
+
+stream()
+    .
+
+filter(...)
+    .
+
+toList();
+```
+
+Optionaler Parameter `alsoChangeCollectorsToList: true` ersetzt zusätzlich das ältere `Collectors.toList()`.
+
+## Struktur
+
+```
+zettsystems-recipes/
+├── src/                   Recipe-Definition (Java)
+├── build.gradle.kts       Build der Recipe-Bibliothek
+├── demo-maven/            Demo-Konsument via Maven (mvn rewrite:run)
+└── demo-gradle/           Demo-Konsument via Gradle (gradlew rewriteRun)
+```
+
+## Recipe lokal bauen und veröffentlichen
+
 ```bash
 ./gradlew publishToMavenLocal
-# or ./gradlew pTML
+# oder ./gradlew pTML
 ```
-This will publish to your local maven repository, typically under `~/.m2/repository`.
 
-## Usage
+Veröffentlicht nach `~/.m2/repository`. Anschließend kann die Recipe in den beiden Demo-Projekten oder in eigenen
+Projekten verwendet werden.
+
+## Recipe in Maven verwenden
+
 ```xml
-<project>
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.openrewrite.maven</groupId>
-                <artifactId>rewrite-maven-plugin</artifactId>
-                <version>5.12.0</version>
-                <configuration>
-                    <activeRecipes>
-                        <recipe>de.zettsystems.UseToList</recipe>
-                    </activeRecipes>
-                </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>de.zettsystems</groupId>
-                        <artifactId>zettsystems-recipes</artifactId>
-                        <version>0.1.0</version>
-                    </dependency>
-                </dependencies>
-            </plugin>
-        </plugins>
-    </build>
-</project>
+
+<plugin>
+    <groupId>org.openrewrite.maven</groupId>
+    <artifactId>rewrite-maven-plugin</artifactId>
+    <version>5.12.0</version>
+    <configuration>
+        <activeRecipes>
+            <recipe>de.zettsystems.UseToList</recipe>
+        </activeRecipes>
+    </configuration>
+    <dependencies>
+        <dependency>
+            <groupId>de.zettsystems</groupId>
+            <artifactId>zettsystems-recipes</artifactId>
+            <version>0.1.0</version>
+        </dependency>
+    </dependencies>
+</plugin>
 ```
 
-Unlike Maven, Gradle must be explicitly configured to resolve dependencies from Maven local.
-The root project of your Gradle build, make your recipe module a dependency of the `rewrite` configuration:
+Vollständiges Beispiel inkl. Vorher/Nachher: [`demo-maven/`](demo-maven/).
+
+## Recipe in Gradle verwenden
+
+Anders als Maven muss Gradle explizit konfiguriert werden, damit die Recipe aus Maven Local aufgelöst wird:
 
 ```groovy
 plugins {
@@ -51,7 +97,7 @@ repositories {
 }
 
 dependencies {
-    rewrite(de.zettsystems:zettsystems-recipes:latest.integration")
+    rewrite("de.zettsystems:zettsystems-recipes:latest.integration")
 }
 
 rewrite {
@@ -59,26 +105,31 @@ rewrite {
 }
 ```
 
-Now you can run `mvn rewrite:run` or `gradlew rewriteRun` to run your recipe.
+Vollständiges Beispiel inkl. Vorher/Nachher: [`demo-gradle/`](demo-gradle/).
 
-## Update Collectors.toList() as well
-Write a rewrite.yaml like this:
+## `Collectors.toList()` mitwandeln
+
+Ein eigenes `rewrite.yaml` im Projekt-Root anlegen:
+
 ```yaml
 ---
 type: specs.openrewrite.org/v1beta/recipe
 name: de.zettsystems.UseToListTrue
 recipeList:
-- de.zettsystems.UseToList:
-  alsoChangeCollectorsToList: true
+  - de.zettsystems.UseToList:
+      alsoChangeCollectorsToList: true
 ```
-And put it at your project's root.
-Then use
-```xml
 
+Und als aktive Recipe verwenden:
+
+```xml
 <configuration>
     <activeRecipes>
         <recipe>de.zettsystems.UseToListTrue</recipe>
     </activeRecipes>
 </configuration>
 ```
-instead.
+
+## Stack
+
+Java 25+, OpenRewrite, Gradle Kotlin DSL.

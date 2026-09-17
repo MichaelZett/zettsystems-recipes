@@ -1,4 +1,21 @@
 ---
+# Builds every push and pull request. Whether the build is also released is
+# decided by the version in gradle.properties, not by a separate trigger:
+#
+#   1.2.3-SNAPSHOT   build only
+#   1.2.3            build, then upload to Maven Central and tag v1.2.3
+#
+# So a release is "drop the -SNAPSHOT and push to master". Snapshots are never
+# uploaded anywhere; use `./gradlew publishToMavenLocal` to consume them.
+#
+# The upload only creates a deployment; releasing it stays a manual step in
+# https://central.sonatype.com/publishing/deployments. A version that is already
+# on Central is skipped, so re-running the workflow is harmless.
+#
+# Required repository secrets:
+#   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD  publisher token from the portal
+#   SIGNING_KEY                                      `gpg --export-secret-keys --armor`
+#   SIGNING_PASSWORD                                 passphrase of that key
 name: ci
 
 on:
@@ -10,6 +27,7 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
 
 env:
   GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx2048m -XX:+HeapDumpOnOutOfMemoryError"'
@@ -18,21 +36,29 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is-release: ${{ steps.version.outputs.is-release }}
+      already-published: ${{ steps.published.outputs.already-published }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
       - name: validate-gradle-wrapper
         uses: gradle/actions/wrapper-validation@v6
+
       - name: set-up-jdk
         uses: actions/setup-java@v6
         with:
           distribution: zulu
           java-version: 25
           cache: gradle
+
       - name: build
         # `build` runs the tests plus ErrorProne/NullAway, SpotBugs and the JaCoCo thresholds.
         run: ./gradlew ${GRADLE_SWITCHES} build
+
       - name: upload-reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -43,3 +69,73 @@ jobs:
             build/reports/spotbugs/
             build/reports/jacoco/
           retention-days: 7
+
+      - name: version
+        id: version
+        run: |
+          VERSION=$(grep '^version=' gradle.properties | cut -d= -f2- | tr -d '\r')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          case "${VERSION}" in
+            *-SNAPSHOT) echo "is-release=false" >> "$GITHUB_OUTPUT"
+                        echo "::notice::${VERSION} is a snapshot - building only." ;;
+            *)          echo "is-release=true"  >> "$GITHUB_OUTPUT"
+                        echo "::notice::${VERSION} is a release." ;;
+          esac
+
+      - name: check-already-published
+        id: published
+        if: steps.version.outputs.is-release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          URL="https://repo1.maven.org/maven2/de/zettsystems/zettsystems-recipes/${VERSION}/zettsystems-recipes-${VERSION}.pom"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "${URL}")
+          if [ "${CODE}" = "200" ]; then
+            echo "already-published=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${VERSION} is already on Maven Central - nothing to upload."
+          else
+            echo "already-published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: [build]
+    if: >-
+      github.event_name != 'pull_request'
+      && needs.build.outputs.is-release == 'true'
+      && needs.build.outputs.already-published == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: set-up-jdk
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: 25
+          cache: gradle
+
+      - name: publish-to-maven-central
+        timeout-minutes: 30
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: ./gradlew ${GRADLE_SWITCHES} publishToMavenCentral
+
+      - name: tag-release
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "::notice::Tag v${VERSION} already exists."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "Release ${VERSION}"
+          git push origin "v${VERSION}"

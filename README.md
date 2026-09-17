@@ -132,6 +132,9 @@ about `Math.floorMod`, and the AssertJ fix cleans up after `org.openrewrite.java
 ./gradlew publishToMavenLocal   # install into ~/.m2
 ```
 
+`master` carries a `-SNAPSHOT` version between releases. Snapshots are not published anywhere, so use
+`publishToMavenLocal` to try out an unreleased state.
+
 Building needs a JDK 25 toolchain; Gradle fetches one through the foojay resolver if none is installed.
 
 ## License

@@ -1,31 +1,14 @@
 # demo-gradle
 
-Gradle-Demo-Konsument für die [`UseToList`-Recipe](../) aus dem übergeordneten `zettsystems-recipes`-Projekt — zeigt die
-Anwendung via `org.openrewrite.rewrite`-Plugin.
-
-## Voraussetzung
-
-Recipe einmal lokal veröffentlichen (im Repo-Root):
-
-```bash
-./gradlew publishToMavenLocal
-```
-
-## Anwendung
-
-Im Verzeichnis `demo-gradle/`:
+Runnable example of the [`UseToList` recipe](../) with the `org.openrewrite.rewrite` plugin.
 
 ```bash
 ./gradlew rewriteRun
 ```
 
-## Was passiert
+`src/main/java/de/zettsystems/exercise/StudentManagement.java` uses `Collectors.toUnmodifiableList()` and
+`Collectors.toList()`; after the run both are `Stream.toList()`. Restore the sample with `git checkout -- src`.
 
-In `src/main/java/de/zettsystems/exercise/` befindet sich Beispielcode mit `Collectors.toUnmodifiableList()`. Nach
-`./gradlew rewriteRun` ist der Code auf `Stream.toList()` migriert.
-
-## Konfiguration
-
-- `build.gradle` — bindet das `org.openrewrite.rewrite`-Plugin und die lokal veröffentlichte Recipe ein (`mavenLocal()`
-  als Repository)
-- `rewrite.yml` — aktiviert die `UseToListTrue`-Variante (mit `alsoChangeCollectorsToList: true`)
+[`build.gradle`](build.gradle) activates `de.zettsystems.UseToListTrue` — the variant that also converts
+`Collectors.toList()` — next to `org.openrewrite.java.migrate.UpgradeToJava17`, so the diff shows text blocks and
+pattern matching as well.

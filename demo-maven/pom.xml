@@ -8,18 +8,16 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven>3.3.1</maven>
+        <maven.compiler.release>17</maven.compiler.release>
+        <zettsystems-recipes.version>1.0.0</zettsystems-recipes.version>
     </properties>
-
-    <dependencies>
-    </dependencies>
 
     <build>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>3.4.1</version>
+                <version>3.6.3</version>
                 <executions>
                     <execution>
                         <id>enforce-maven</id>
@@ -29,7 +27,7 @@
                         <configuration>
                             <rules>
                                 <requireMavenVersion>
-                                    <version>3.3.1</version>
+                                    <version>3.9.0</version>
                                 </requireMavenVersion>
                             </rules>
                         </configuration>
@@ -39,11 +37,11 @@
             <plugin>
                 <groupId>org.openrewrite.maven</groupId>
                 <artifactId>rewrite-maven-plugin</artifactId>
-                <version>5.17.0</version>
+                <version>6.46.1</version>
                 <configuration>
                     <activeRecipes>
                         <recipe>org.openrewrite.java.migrate.UpgradeToJava17</recipe>
-                        <recipe>de.zettsystems.UseToList</recipe>
+                        <!-- Ships with the recipe artifact; no local rewrite.yml needed. -->
                         <recipe>de.zettsystems.UseToListTrue</recipe>
                     </activeRecipes>
                 </configuration>
@@ -51,22 +49,19 @@
                     <dependency>
                         <groupId>org.openrewrite.recipe</groupId>
                         <artifactId>rewrite-migrate-java</artifactId>
-                        <version>2.4.2</version>
+                        <version>3.42.1</version>
                     </dependency>
                     <dependency>
                         <groupId>de.zettsystems</groupId>
                         <artifactId>zettsystems-recipes</artifactId>
-                        <version>0.1.0</version>
+                        <version>${zettsystems-recipes.version}</version>
                     </dependency>
                 </dependencies>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.12.0</version>
-                <configuration>
-                    <release>17</release>
-                </configuration>
+                <version>3.16.0</version>
             </plugin>
         </plugins>
 
@@ -75,7 +70,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-resources-plugin</artifactId>
-                    <version>3.3.1</version>
+                    <version>3.5.0</version>
                 </plugin>
             </plugins>
         </pluginManagement>

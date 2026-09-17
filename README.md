@@ -1,69 +1,44 @@
 # zettsystems-recipes
 
-Custom OpenRewrite Recipe `UseToList` — ersetzt `collect(Collectors.toUnmodifiableList())` durch das modernere
-`Stream.toList()` (Java 16+).
+[![Maven Central](https://img.shields.io/maven-central/v/de.zettsystems/zettsystems-recipes.svg)](https://central.sonatype.com/artifact/de.zettsystems/zettsystems-recipes)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-## Hintergrund
+An [OpenRewrite](https://docs.openrewrite.org/) recipe that replaces `collect(Collectors.toUnmodifiableList())` with
+`Stream.toList()`:
 
-Geschrieben 2023, als OpenRewrite für diese Migration noch keine Standard-Recipe im offiziellen Katalog hatte.
-Mittlerweile gibt es vergleichbare Migrationen im offiziellen Recipe-Set (
-`org.openrewrite.java.migrate.util.UseStreamToListNotCollect` u. ä.) — als Hands-on-Beispiel zur Recipe-Engine ist die
-Implementierung hier weiterhin nützlich.
-
-## Was die Recipe macht
-
-```java
-// vorher
-list.stream()
-    .
-
-filter(...)
-    .
-
-collect(Collectors.toUnmodifiableList());
-
-// nachher
-        list.
-
-stream()
-    .
-
-filter(...)
-    .
-
-toList();
+```diff
+ list.stream()
+     .filter(...)
+-    .collect(Collectors.toUnmodifiableList());
++    .toList();
 ```
 
-Optionaler Parameter `alsoChangeCollectorsToList: true` ersetzt zusätzlich das ältere `Collectors.toList()`.
+Both forms return an unmodifiable list, so the change preserves behaviour. An unused
+`java.util.stream.Collectors` import is removed along the way.
 
-## Struktur
+## Recipes
 
-```
-zettsystems-recipes/
-├── src/                   Recipe-Definition (Java)
-├── build.gradle.kts       Build der Recipe-Bibliothek
-├── demo-maven/            Demo-Konsument via Maven (mvn rewrite:run)
-└── demo-gradle/           Demo-Konsument via Gradle (gradlew rewriteRun)
-```
+| Recipe | Converts |
+|---|---|
+| `de.zettsystems.UseToList` | `collect(Collectors.toUnmodifiableList())` |
+| `de.zettsystems.UseToListTrue` | additionally `collect(Collectors.toList())` |
 
-## Recipe lokal bauen und veröffentlichen
+`de.zettsystems.UseToList` has one optional boolean option, `alsoChangeCollectorsToList` (default `false`).
+`de.zettsystems.UseToListTrue` is a ready-made variant with that option set to `true`.
 
-```bash
-./gradlew publishToMavenLocal
-# oder ./gradlew pTML
-```
+> `Collectors.toList()` returns a *modifiable* list, `Stream.toList()` does not. Code that mutates the result will
+> start throwing `UnsupportedOperationException`, so review what `UseToListTrue` changes.
 
-Veröffentlicht nach `~/.m2/repository`. Anschließend kann die Recipe in den beiden Demo-Projekten oder in eigenen
-Projekten verwendet werden.
+The rewritten code needs Java 16+, which is where `Stream.toList()` was introduced. The artifact itself runs on any
+build using JDK 17 or newer.
 
-## Recipe in Maven verwenden
+## Maven
 
 ```xml
-
 <plugin>
     <groupId>org.openrewrite.maven</groupId>
     <artifactId>rewrite-maven-plugin</artifactId>
-    <version>5.12.0</version>
+    <version>6.46.1</version>
     <configuration>
         <activeRecipes>
             <recipe>de.zettsystems.UseToList</recipe>
@@ -73,63 +48,72 @@ Projekten verwendet werden.
         <dependency>
             <groupId>de.zettsystems</groupId>
             <artifactId>zettsystems-recipes</artifactId>
-            <version>0.1.0</version>
+            <version>1.0.0</version>
         </dependency>
     </dependencies>
 </plugin>
 ```
 
-Vollständiges Beispiel inkl. Vorher/Nachher: [`demo-maven/`](demo-maven/).
+```bash
+mvn rewrite:run
+```
 
-## Recipe in Gradle verwenden
-
-Anders als Maven muss Gradle explizit konfiguriert werden, damit die Recipe aus Maven Local aufgelöst wird:
+## Gradle
 
 ```groovy
 plugins {
-    id("java")
-    id("org.openrewrite.rewrite") version("latest.release")
+    id 'java'
+    id 'org.openrewrite.rewrite' version '7.39.0'
 }
 
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
 dependencies {
-    rewrite("de.zettsystems:zettsystems-recipes:latest.integration")
+    rewrite 'de.zettsystems:zettsystems-recipes:1.0.0'
 }
 
 rewrite {
-    activeRecipe("de.zettsystems.UseToList")
+    activeRecipe('de.zettsystems.UseToList')
 }
 ```
 
-Vollständiges Beispiel inkl. Vorher/Nachher: [`demo-gradle/`](demo-gradle/).
-
-## `Collectors.toList()` mitwandeln
-
-Ein eigenes `rewrite.yaml` im Projekt-Root anlegen:
-
-```yaml
----
-type: specs.openrewrite.org/v1beta/recipe
-name: de.zettsystems.UseToListTrue
-recipeList:
-  - de.zettsystems.UseToList:
-      alsoChangeCollectorsToList: true
+```bash
+./gradlew rewriteRun
 ```
 
-Und als aktive Recipe verwenden:
+## Converting `Collectors.toList()` as well
 
-```xml
-<configuration>
-    <activeRecipes>
-        <recipe>de.zettsystems.UseToListTrue</recipe>
-    </activeRecipes>
-</configuration>
+Activate `de.zettsystems.UseToListTrue` instead of `de.zettsystems.UseToList`. Nothing else changes — since 1.0.0 that
+recipe ships inside the artifact, so no local `rewrite.yml` is needed.
+
+## Upgrading from 0.1.0
+
+- The declarative recipe in the artifact was renamed from `de.zettsystems.UseToList` to `de.zettsystems.UseToListTrue`.
+  If a local `rewrite.yml` defined `UseToListTrue`, delete it — the artifact provides it now.
+- The artifact is compiled for Java 17 instead of Java 8, so it needs a build running on JDK 17 or newer.
+- `logback-classic` is no longer pulled in transitively.
+
+See the [changelog](CHANGELOG.md) for the full list.
+
+## Examples
+
+Runnable before/after demos: [`demo-maven/`](demo-maven/) and [`demo-gradle/`](demo-gradle/).
+
+## Background
+
+Written in 2023, when OpenRewrite's catalog did not cover this migration yet. The official recipe set now has
+equivalents such as `org.openrewrite.java.migrate.util.UseStreamToListNotCollect`; this project remains useful as a
+compact example of a hand-written recipe.
+
+## Building from source
+
+```bash
+./gradlew build                 # compile and test (JDK 25 toolchain)
+./gradlew publishToMavenLocal   # install into ~/.m2
 ```
 
-## Stack
+## License
 
-Java 25+, OpenRewrite, Gradle Kotlin DSL.
+[Apache License 2.0](LICENSE)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 the original author or authors.
+ * Copyright 2023 the original author or authors.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,108 +16,231 @@
 package de.zettsystems;
 
 import org.junit.jupiter.api.Test;
-import org.openrewrite.java.JavaParser;
 import org.openrewrite.test.RecipeSpec;
 import org.openrewrite.test.RewriteTest;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.openrewrite.java.Assertions.java;
 
 class UseToListTest implements RewriteTest {
+
     @Override
     public void defaults(RecipeSpec spec) {
-        spec.recipe(new UseToList(true))
-          .parser(JavaParser.fromJavaVersion()
-            .logCompilationWarningsAndErrors(true));
+        spec.recipe(new UseToList(true));
     }
 
     @Test
-    void replaceToUnmodifiableList() {
+    void replacesToUnmodifiableList() {
         rewriteRun(
-          spec -> spec
-            .parser(JavaParser.fromJavaVersion().logCompilationWarningsAndErrors(false)),
           // language=java
-          java("""
+          java(
+            """
+              import java.util.List;
               import java.util.stream.Collectors;
               import java.util.stream.Stream;
-              import java.util.List;
-                                  
+
               class Test {
-                 public static void main(String[] args) {
-                     List<String> list = Stream.of("test").collect(Collectors.toUnmodifiableList());
-                 }
+                  List<String> names() {
+                      return Stream.of("test").collect(Collectors.toUnmodifiableList());
+                  }
               }
-                                  
               """,
             """
-              import java.util.stream.Stream;
               import java.util.List;
-                                  
+              import java.util.stream.Stream;
+
               class Test {
-                 public static void main(String[] args) {
-                     List<String> list = Stream.of("test").toList();
-                 }
+                  List<String> names() {
+                      return Stream.of("test").toList();
+                  }
               }
-                                  
               """
           )
         );
     }
 
     @Test
-    void replaceToList() {
+    void replacesToListWhenOptionIsSet() {
         rewriteRun(
-          spec -> spec
-            .parser(JavaParser.fromJavaVersion().logCompilationWarningsAndErrors(false)),
           // language=java
-          java("""
+          java(
+            """
+              import java.util.List;
               import java.util.stream.Collectors;
               import java.util.stream.Stream;
-              import java.util.List;
-                                  
+
               class Test {
-                 public static void main(String[] args) {
-                     List<String> list = Stream.of("test").collect(Collectors.toList());
-                 }
+                  List<String> names() {
+                      return Stream.of("test").collect(Collectors.toList());
+                  }
               }
-                                  
               """,
             """
-              import java.util.stream.Stream;
               import java.util.List;
-                                  
+              import java.util.stream.Stream;
+
               class Test {
-                 public static void main(String[] args) {
-                     List<String> list = Stream.of("test").toList();
-                 }
+                  List<String> names() {
+                      return Stream.of("test").toList();
+                  }
               }
-                                  
               """
           )
         );
     }
 
     @Test
-    void doNotReplaceToList() {
+    void keepsToListWhenOptionIsNotSet() {
         rewriteRun(
-          spec -> {
-              final UseToList recipe = new UseToList(false);
-
-              spec.recipe(recipe)
-                .parser(JavaParser.fromJavaVersion().logCompilationWarningsAndErrors(false));
-          },
+          spec -> spec.recipe(new UseToList(false)),
           // language=java
-          java("""
-            import java.util.stream.Collectors;
-            import java.util.stream.Stream;
-            import java.util.List;
-                                
-            class Test {
-               public static void main(String[] args) {
-                   List<String> list = Stream.of("test").collect(Collectors.toList());
-               }
-            }
-                                
-            """)
+          java(
+            """
+              import java.util.List;
+              import java.util.stream.Collectors;
+              import java.util.stream.Stream;
+
+              class Test {
+                  List<String> names() {
+                      return Stream.of("test").collect(Collectors.toList());
+                  }
+              }
+              """
+          )
         );
+    }
+
+    @Test
+    void keepsCollectorsOtherThanToList() {
+        rewriteRun(
+          // language=java
+          java(
+            """
+              import java.util.Set;
+              import java.util.stream.Collectors;
+              import java.util.stream.Stream;
+
+              class Test {
+                  Set<String> names() {
+                      return Stream.of("test").collect(Collectors.toSet());
+                  }
+              }
+              """
+          )
+        );
+    }
+
+    @Test
+    void keepsThreeArgumentCollect() {
+        rewriteRun(
+          // language=java
+          java(
+            """
+              import java.util.ArrayList;
+              import java.util.List;
+              import java.util.stream.Stream;
+
+              class Test {
+                  List<String> names() {
+                      return Stream.of("test").collect(ArrayList::new, ArrayList::add, ArrayList::addAll);
+                  }
+              }
+              """
+          )
+        );
+    }
+
+    @Test
+    void keepsCollectorsToListWhenUsingTheDefaultConstructor() {
+        rewriteRun(
+          spec -> spec.recipe(new UseToList()),
+          // language=java
+          java(
+            """
+              import java.util.List;
+              import java.util.stream.Collectors;
+              import java.util.stream.Stream;
+
+              class Test {
+                  List<String> names() {
+                      return Stream.of("test").collect(Collectors.toList());
+                  }
+              }
+              """
+          )
+        );
+    }
+
+    @Test
+    void appliesTheDeclarativeUseToListTrueRecipe() {
+        rewriteRun(
+          spec -> spec.recipeFromResource("/META-INF/rewrite/rewrite.yml", "de.zettsystems.UseToListTrue"),
+          // language=java
+          java(
+            """
+              import java.util.List;
+              import java.util.stream.Collectors;
+              import java.util.stream.Stream;
+
+              class Test {
+                  List<String> names() {
+                      return Stream.of("test").collect(Collectors.toList());
+                  }
+              }
+              """,
+            """
+              import java.util.List;
+              import java.util.stream.Stream;
+
+              class Test {
+                  List<String> names() {
+                      return Stream.of("test").toList();
+                  }
+              }
+              """
+          )
+        );
+    }
+
+    @Test
+    void keepsTheFormattingOfAChainedCall() {
+        rewriteRun(
+          // language=java
+          java(
+            """
+              import java.util.List;
+              import java.util.stream.Collectors;
+              import java.util.stream.Stream;
+
+              class Test {
+                  List<String> names() {
+                      return Stream.of("test")
+                              .filter(s -> !s.isEmpty())
+                              .collect(Collectors.toUnmodifiableList());
+                  }
+              }
+              """,
+            """
+              import java.util.List;
+              import java.util.stream.Stream;
+
+              class Test {
+                  List<String> names() {
+                      return Stream.of("test")
+                              .filter(s -> !s.isEmpty())
+                              .toList();
+                  }
+              }
+              """
+          )
+        );
+    }
+
+    @Test
+    void treatsAnUnsetOptionAsFalse() {
+        assertFalse(new UseToList((Boolean) null).isAlsoChangeCollectorsToList());
+        assertFalse(new UseToList().isAlsoChangeCollectorsToList());
+        assertTrue(new UseToList(true).isAlsoChangeCollectorsToList());
     }
 }

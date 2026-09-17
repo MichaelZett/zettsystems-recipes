@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 the original author or authors.
+ * Copyright 2023 the original author or authors.
  * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,40 +32,43 @@ import org.openrewrite.java.tree.J;
 import java.util.List;
 
 /**
- * Use toList() instead of collect(Collectors.toUnmodifiableList()).
+ * Replaces {@code stream.collect(Collectors.toUnmodifiableList())} with {@code stream.toList()}
+ * and, on request, {@code stream.collect(Collectors.toList())} as well.
  */
 @Getter
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = false)
 public class UseToList extends Recipe {
-    private static final MethodMatcher STREAM_COLLECT = new MethodMatcher("java.util.stream.Stream collect(java.util.stream.Collector)");
-    private static final MethodMatcher COLLECTORS_UNMOD_LIST = new MethodMatcher("java.util.stream.Collectors toUnmodifiableList()");
-    private static final MethodMatcher COLLECTORS_LIST = new MethodMatcher("java.util.stream.Collectors toList()");
-    private static final String STREAM_STREAM = "java.util.stream.Stream";
+    private static final MethodMatcher STREAM_COLLECT =
+            new MethodMatcher("java.util.stream.Stream collect(java.util.stream.Collector)");
+    private static final MethodMatcher COLLECTORS_UNMODIFIABLE_LIST =
+            new MethodMatcher("java.util.stream.Collectors toUnmodifiableList()");
+    private static final MethodMatcher COLLECTORS_LIST =
+            new MethodMatcher("java.util.stream.Collectors toList()");
+    private static final String COLLECTORS = "java.util.stream.Collectors";
 
-    /**
-     * Whether to also change `collect(Collectors.toList())` (the default value is false).
-     */
-    @Option(displayName = "Whether to also change `collect(Collectors.toList())` (the default value is false).",
-            description = "When set to `true` `collect(Collectors.toList())` gets changed as well,"
-                    + "changing implementation of List from modifiable to unmodifiable (the default value is false).",
+    @Option(displayName = "Also change `collect(Collectors.toList())`",
+            description = "When `true`, `collect(Collectors.toList())` is replaced as well. Note that this changes "
+                    + "the returned list from modifiable to unmodifiable. Defaults to `false`.",
             example = "true",
             required = false)
     boolean alsoChangeCollectorsToList;
 
     /**
-     * Use this to not change collect(Collectors.toList()).
+     * Leaves {@code collect(Collectors.toList())} untouched.
      */
     public UseToList() {
         this(false);
     }
 
     /**
-     * Use this to also change collect(Collectors.toList()).
+     * Creates the recipe with an explicit option value.
      *
-     * @param alsoChangeCollectorsToList set to true to also change collect(Collectors.toList()).
+     * @param alsoChangeCollectorsToList {@code true} to also replace {@code collect(Collectors.toList())};
+     *                                   {@code null} is treated as {@code false}, because OpenRewrite passes
+     *                                   {@code null} for an optional option that was not configured.
      */
     public UseToList(Boolean alsoChangeCollectorsToList) {
-        this.alsoChangeCollectorsToList = alsoChangeCollectorsToList;
+        this.alsoChangeCollectorsToList = Boolean.TRUE.equals(alsoChangeCollectorsToList);
     }
 
     @Override
@@ -77,38 +80,56 @@ public class UseToList extends Recipe {
     @Override
     public String getDescription() {
         //language=markdown
-        return "Prefer the more modern API like this.";
+        return "Replaces `collect(Collectors.toUnmodifiableList())` with the more concise `Stream.toList()` "
+                + "introduced in Java 16. Both return an unmodifiable list, so the replacement is behaviour "
+                + "preserving. Set `alsoChangeCollectorsToList` to `true` to convert the older "
+                + "`collect(Collectors.toList())` as well.";
     }
 
     @Override
     public TreeVisitor<?, ExecutionContext> getVisitor() {
-        final TreeVisitor<?, ExecutionContext> check = new UsesMethod<>(STREAM_COLLECT);
-        return Preconditions.check(check,
-                new JavaVisitor<ExecutionContext>() {
-                    private final JavaTemplate toList = JavaTemplate
-                            .builder("toList()")
-                            .imports(STREAM_STREAM)
-                            .build();
+        return Preconditions.check(new UsesMethod<>(STREAM_COLLECT), new JavaVisitor<ExecutionContext>() {
+            // Replacing the whole invocation (instead of just the method name) lets the
+            // template re-attribute the type; `replaceMethod()` would keep the type of
+            // `collect(Collector)` and leave the LST with an argument count mismatch.
+            private final JavaTemplate toList =
+                    JavaTemplate.builder("#{any(java.util.stream.Stream)}.toList()").build();
 
-                    @Override
-                    public J visitMethodInvocation(J.MethodInvocation method, ExecutionContext executionContext) {
-                        if (STREAM_COLLECT.matches(method)) {
-                            List<Expression> arguments = method.getArguments();
-                            if (arguments.size() == 1) {
-                                Expression arg = arguments.get(0);
-                                if (arg instanceof J.MethodInvocation) {
-                                    J.MethodInvocation methodArg = (J.MethodInvocation) arg;
-                                    boolean collectorsToList = Boolean.TRUE.equals(UseToList.this.alsoChangeCollectorsToList);
-                                    if (COLLECTORS_UNMOD_LIST.matches(methodArg) || (collectorsToList && COLLECTORS_LIST.matches(methodArg))) {
-                                        maybeRemoveImport("java.util.stream.Collectors");
-                                        return toList.apply(getCursor(), method.getCoordinates().replaceMethod());
-                                    }
-                                }
-                            }
-                        }
-                        return super.visitMethodInvocation(method, executionContext);
-                    }
+            @Override
+            public J visitMethodInvocation(J.MethodInvocation method, ExecutionContext ctx) {
+                if (isReplaceableCollect(method)) {
+                    maybeRemoveImport(COLLECTORS);
+                    J replacement = toList.apply(getCursor(), method.getCoordinates().replace(), method.getSelect());
+                    return restoreSelectFormatting(replacement, method);
                 }
-        );
+                return super.visitMethodInvocation(method, ctx);
+            }
+
+            /**
+             * The template reformats the receiver, which collapses a chained call onto a
+             * single line. Putting the original padded select back keeps the line break.
+             */
+            private J restoreSelectFormatting(J replacement, J.MethodInvocation original) {
+                if (replacement instanceof J.MethodInvocation replaced) {
+                    return replaced.getPadding().withSelect(original.getPadding().getSelect());
+                }
+                return replacement;
+            }
+
+            private boolean isReplaceableCollect(J.MethodInvocation method) {
+                if (!STREAM_COLLECT.matches(method) || method.getSelect() == null) {
+                    return false;
+                }
+                List<Expression> arguments = method.getArguments();
+                return arguments.size() == 1
+                        && arguments.get(0) instanceof J.MethodInvocation collector
+                        && isReplaceableCollector(collector);
+            }
+
+            private boolean isReplaceableCollector(J.MethodInvocation collector) {
+                return COLLECTORS_UNMODIFIABLE_LIST.matches(collector)
+                        || (alsoChangeCollectorsToList && COLLECTORS_LIST.matches(collector));
+            }
+        });
     }
 }

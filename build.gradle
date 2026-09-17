@@ -1,27 +1,21 @@
 plugins {
     id 'java-library'
     id 'signing'
-    id 'maven-publish'
-    id 'com.github.ben-manes.versions' version "${benManesVersionsVersion}"
+    id 'com.vanniktech.maven.publish' version "${vanniktechPublishVersion}"
+    id 'io.github.ben-manes.versions' version "${benManesVersionsVersion}"
 }
 
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
-// Set as appropriate for your organization
-group = 'de.zettsystems'
-description = 'Rewrite recipes from zettsystems.'
-version = '0.1.0'
-
+// `group` and `version` come from gradle.properties
+description = 'OpenRewrite recipes from ZettSystems.'
 
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
-    withSourcesJar()
-    withJavadocJar()
 }
 
 dependencies {
@@ -31,14 +25,18 @@ dependencies {
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 
-    runtimeOnly 'org.openrewrite:rewrite-java-8'
-    runtimeOnly 'org.openrewrite:rewrite-java-17'
-    runtimeOnly 'org.openrewrite:rewrite-java-21'
-    runtimeOnly "ch.qos.logback:logback-classic:${logbackVersion}"
-
-    testImplementation 'org.openrewrite:rewrite-test'
+    testImplementation('org.openrewrite:rewrite-test') {
+        exclude group: 'org.slf4j', module: 'slf4j-nop'
+    }
     testImplementation "org.junit.jupiter:junit-jupiter:${junitJupiterVersion}"
 
+    // Parsers for the Java versions the test fixtures are written in.
+    testRuntimeOnly 'org.openrewrite:rewrite-java-17'
+    testRuntimeOnly 'org.openrewrite:rewrite-java-21'
+    testRuntimeOnly 'org.openrewrite:rewrite-java-25'
+
+    // An SLF4J binding, so parser warnings become visible while testing.
+    testRuntimeOnly "ch.qos.logback:logback-classic:${logbackVersion}"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}"
     testRuntimeOnly "com.google.guava:guava:${guavaVersion}"
 }
@@ -49,6 +47,22 @@ tasks.named('test') {
 
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-Xlint:deprecation'
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes('Implementation-Title': project.name,
+                'Implementation-Version': project.version)
+    }
+    metaInf {
+        from(file('LICENSE'))
+    }
+}
+
+// The recipe is compiled against Java 17 so that it can be loaded by any build
+// running on JDK 17 or newer. Only the tests use the full Java 25 language level.
+tasks.named('compileJava') {
+    options.release = 17
 }
 
 // ------------------------------------------------------ dependency updates
@@ -83,57 +97,52 @@ dependencyUpdates {
 
 // ------------------------------------------------------ sign & publish
 
-def OSSRH_USERNAME = project.findProperty('OSSRH_USERNAME') ?: ''
-def OSSRH_PASSWORD = project.findProperty('OSSRH_PASSWORD') ?: ''
-
-publishing {
-    publications {
-        maven(MavenPublication) {
-            groupId = project.group.toString()
-            artifactId = project.name
-            version = project.version.toString()
-            from components.java
-            pom {
-                name = project.name
-                description = project.description
-                url = 'https://github.com/MichaelZett/zettsystems-recipes'
-                licenses {
-                    license {
-                        name = 'Apache-2.0'
-                        url = 'https://opensource.org/licenses/Apache-2.0'
-                    }
-                }
-                developers {
-                    developer {
-                        id = 'michaelzett'
-                        name = 'Michael Zoeller'
-                        organization = 'ZettSystems'
-                        organizationUrl = 'https://zettsystems.de/'
-                    }
-                }
-                scm {
-                    url = 'https://github.com/MichaelZett/zettsystems-recipes.git'
-                    connection = 'scm:git:git://github.com/MichaelZett/zettsystems-recipes.git'
-                    developerConnection = 'scm:git:git://github.com/MichaelZett/zettsystems-recipes.git'
-                }
-                issueManagement {
-                    url = 'https://github.com/MichaelZett/zettsystems-recipes/issues'
-                }
-            }
-        }
-    }
-    repositories {
-        maven {
-            url = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
-            credentials {
-                username = OSSRH_USERNAME
-                password = OSSRH_PASSWORD
-            }
-        }
+// Locally the GPG agent holds the key; CI hands the key in through
+// `signingInMemoryKey`, which the publish plugin wires up on its own.
+if (!project.hasProperty('signingInMemoryKey')) {
+    signing {
+        useGpgCmd()
     }
 }
 
-signing {
-    useGpgCmd()
-    sign publishing.publications.maven
+mavenPublishing {
+    // Uploads to the Central Portal (https://central.sonatype.com). The bundle is
+    // only validated, never released automatically — release it by hand in the
+    // portal, or run `publishAndReleaseToMavenCentral` once that is trusted.
+    publishToMavenCentral()
+    signAllPublications()
+
+    coordinates(group.toString(), 'zettsystems-recipes', version.toString())
+
+    pom {
+        name = 'zettsystems-recipes'
+        description = project.description
+        url = 'https://github.com/MichaelZett/zettsystems-recipes'
+        inceptionYear = '2023'
+        licenses {
+            license {
+                name = 'The Apache License, Version 2.0'
+                url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution = 'repo'
+            }
+        }
+        developers {
+            developer {
+                id = 'michaelzett'
+                name = 'Michael Zoeller'
+                email = 'michael2.zoeller@gmail.com'
+                organization = 'ZettSystems'
+                organizationUrl = 'https://zettsystems.de/'
+            }
+        }
+        scm {
+            url = 'https://github.com/MichaelZett/zettsystems-recipes'
+            connection = 'scm:git:https://github.com/MichaelZett/zettsystems-recipes.git'
+            developerConnection = 'scm:git:ssh://git@github.com/MichaelZett/zettsystems-recipes.git'
+        }
+        issueManagement {
+            system = 'GitHub'
+            url = 'https://github.com/MichaelZett/zettsystems-recipes/issues'
+        }
+    }
 }

@@ -1,38 +1,38 @@
 plugins {
     id 'java'
-    id("org.openrewrite.rewrite") version("6.6.1")
+    id 'org.openrewrite.rewrite' version '7.39.0'
 }
 
 repositories {
+    // mavenLocal() first, so `./gradlew publishToMavenLocal` in the repo root can be
+    // tried out before a version reaches Maven Central.
+    mavenLocal()
     mavenCentral()
 }
 
 dependencies {
-    testImplementation libs.junit.jupiter
-
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
     implementation libs.guava
 
-    rewrite(platform("org.openrewrite.recipe:rewrite-recipe-bom:2.5.3"))
-    rewrite("org.openrewrite.recipe:rewrite-migrate-java")
-    rewrite("de.zettsystems:zettsystems-recipes:0.1.0")
+    testImplementation libs.junit.jupiter
+    testRuntimeOnly libs.junit.platform.launcher
+
+    rewrite platform("org.openrewrite.recipe:rewrite-recipe-bom:3.37.0")
+    rewrite 'org.openrewrite.recipe:rewrite-migrate-java'
+    rewrite 'de.zettsystems:zettsystems-recipes:1.0.0'
 }
 
 rewrite {
-    activeRecipe("org.openrewrite.java.migrate.UpgradeToJava17")
-    activeRecipe("de.zettsystems.UseToList")
-    activeRecipe("de.zettsystems.UseToListTrue")
+    activeRecipe('org.openrewrite.java.migrate.UpgradeToJava17')
+    // Ships with the recipe artifact; no local rewrite.yml needed.
+    activeRecipe('de.zettsystems.UseToListTrue')
 }
 
-// Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(11)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
 tasks.named('test') {
-    // Use JUnit Platform for unit tests.
     useJUnitPlatform()
 }

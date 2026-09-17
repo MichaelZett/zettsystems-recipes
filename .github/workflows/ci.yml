@@ -3,7 +3,8 @@
 # decided by the version in gradle.properties, not by a separate trigger:
 #
 #   1.2.3-SNAPSHOT   build only
-#   1.2.3            build, then upload to Maven Central and tag v1.2.3
+#   1.2.3            build, upload to Maven Central, tag v1.2.3 and cut a
+#                    GitHub release with the CHANGELOG section as its notes
 #
 # So a release is "drop the -SNAPSHOT and push to master". Snapshots are never
 # uploaded anywhere; use `./gradlew publishToMavenLocal` to consume them.
@@ -82,6 +83,22 @@ jobs:
                         echo "::notice::${VERSION} is a release." ;;
           esac
 
+      - name: check-changelog
+        # Fails before anything is uploaded or tagged: the release job turns the
+        # matching CHANGELOG section into the GitHub release notes.
+        if: steps.version.outputs.is-release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          FOUND=$(awk -v v="${VERSION}" '
+            BEGIN { h = "## " v; n = length(h) }
+            substr($0, 1, n) == h && (length($0) == n || substr($0, n + 1, 1) == " ") { print "yes"; exit }
+          ' CHANGELOG.md)
+          if [ -z "${FOUND}" ]; then
+            echo "::error file=CHANGELOG.md::No '## ${VERSION}' section - rename '## Unreleased' before releasing."
+            exit 1
+          fi
+
       - name: check-already-published
         id: published
         if: steps.version.outputs.is-release == 'true'
@@ -139,3 +156,34 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "v${VERSION}" -m "Release ${VERSION}"
           git push origin "v${VERSION}"
+
+      - name: github-release
+        # The release notes are the CHANGELOG section for this version, preceded
+        # by the Central coordinates. No assets: the jars live on Central.
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "::notice::Release v${VERSION} already exists."
+            exit 0
+          fi
+          COORDS="de.zettsystems:zettsystems-recipes:${VERSION}"
+          URL="https://central.sonatype.com/artifact/de.zettsystems/zettsystems-recipes/${VERSION}"
+          NOTES="${RUNNER_TEMP}/notes.md"
+          {
+            printf 'Available on [Maven Central](%s): `%s`\n\n' "${URL}" "${COORDS}"
+            # Prefix comparison rather than a regex: the dots in the version
+            # would otherwise be metacharacters.
+            awk -v v="${VERSION}" '
+              BEGIN { h = "## " v; n = length(h) }
+              !f && substr($0, 1, n) == h && (length($0) == n || substr($0, n + 1, 1) == " ") { f = 1; next }
+              f && /^## / { exit }
+              f
+            ' CHANGELOG.md
+          } > "${NOTES}"
+          if [ "$(grep -c . "${NOTES}")" -lt 2 ]; then
+            echo "::error::No CHANGELOG section for ${VERSION} - check-changelog should have caught this."
+            exit 1
+          fi
+          gh release create "v${VERSION}" --title "${VERSION}" --notes-file "${NOTES}" --verify-tag

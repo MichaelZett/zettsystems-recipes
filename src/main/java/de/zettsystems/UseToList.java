@@ -29,8 +29,6 @@ import org.openrewrite.java.search.UsesMethod;
 import org.openrewrite.java.tree.Expression;
 import org.openrewrite.java.tree.J;
 
-import java.util.List;
-
 /**
  * Replaces {@code stream.collect(Collectors.toUnmodifiableList())} with {@code stream.toList()}
  * and, on request, {@code stream.collect(Collectors.toList())} as well.
@@ -97,32 +95,21 @@ public class UseToList extends Recipe {
 
             @Override
             public J visitMethodInvocation(J.MethodInvocation method, ExecutionContext ctx) {
-                if (isReplaceableCollect(method)) {
+                Expression select = method.getSelect();
+                if (select != null && isReplaceableCollect(method)) {
                     maybeRemoveImport(COLLECTORS);
-                    J replacement = toList.apply(getCursor(), method.getCoordinates().replace(), method.getSelect());
-                    return restoreSelectFormatting(replacement, method);
+                    J replacement = toList.apply(getCursor(), method.getCoordinates().replace(), select);
+                    return Selects.restoreFormatting(replacement, method);
                 }
                 return super.visitMethodInvocation(method, ctx);
             }
 
-            /**
-             * The template reformats the receiver, which collapses a chained call onto a
-             * single line. Putting the original padded select back keeps the line break.
-             */
-            private J restoreSelectFormatting(J replacement, J.MethodInvocation original) {
-                if (replacement instanceof J.MethodInvocation replaced) {
-                    return replaced.getPadding().withSelect(original.getPadding().getSelect());
-                }
-                return replacement;
-            }
-
             private boolean isReplaceableCollect(J.MethodInvocation method) {
-                if (!STREAM_COLLECT.matches(method) || method.getSelect() == null) {
+                if (!STREAM_COLLECT.matches(method)) {
                     return false;
                 }
-                List<Expression> arguments = method.getArguments();
-                return arguments.size() == 1
-                        && arguments.get(0) instanceof J.MethodInvocation collector
+                // The matcher above already pins the arity to a single Collector argument.
+                return method.getArguments().get(0) instanceof J.MethodInvocation collector
                         && isReplaceableCollector(collector);
             }
 

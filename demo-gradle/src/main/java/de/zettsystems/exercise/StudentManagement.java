@@ -32,7 +32,13 @@ public class StudentManagement {
         final List<Student> female = getAllFemales(x);
         System.out.printf("The females are: %s.", female);
 
+        System.out.printf("Normalized: %s.", normalizedName(x.get(0)));
+
         printHtml();
+    }
+
+    private static String normalizedName(Student student) {
+        return student.getName().toLowerCase();
     }
 
     private static List<Student> getAllFemales(List<Student> x) {

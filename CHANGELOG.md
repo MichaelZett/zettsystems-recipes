@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 ## 1.0.0 - 2026-09-17
 
+### Added
+
+- `de.zettsystems.UseLocaleWithCaseConversion` — adds `Locale.ROOT` to `String.toLowerCase()` and
+  `String.toUpperCase()`. Under a Turkish locale `"I".toLowerCase()` yields a dotless `ı`, which breaks lookup keys
+  and protocol tokens.
+- `de.zettsystems.UseFloorMod` — `Math.abs(x) % n` → `Math.floorMod(x, n)`. `Math.abs(Integer.MIN_VALUE)` overflows
+  back to a negative number, so the old form can return a negative bucket index. The two expressions differ for
+  negative input, so this is a fix rather than a refactoring.
+- `de.zettsystems.FixAssertJThrowableInstanceOf` — rewrites a discarded `asInstanceOf(throwable(X.class))` into
+  `isInstanceOf(X.class)` and drops the then-unused `throwable` static import. `asInstanceOf` narrows the assertion
+  type and returns a new assertion; used as a statement the check never runs.
+  `org.openrewrite.java.testing.assertj.JUnitToAssertj` produces this shape.
+- `de.zettsystems.ZettSystemsRecipes` — runs the three recipes that are pure refactorings. `UseToListTrue` and
+  `UseFloorMod` stay out of it, because both change behaviour.
+
 ### Breaking
 
 - The declarative recipe bundled with the artifact is now named `de.zettsystems.UseToListTrue`. It used to carry the
@@ -28,6 +43,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), version
 
 - Released through the [Maven Central Portal](https://central.sonatype.com). The OSSRH staging endpoint the previous
   release used was shut down in June 2025.
+- The build runs ErrorProne with NullAway, SpotBugs and JaCoCo, and has a SonarQube configuration. NullAway found the
+  `Boolean` unboxing bug listed above.
 - Dependencies updated: OpenRewrite recipe BOM 3.37.0, Lombok 1.18.48, JUnit 6.1.3, Gradle 9.7.1.
 - Documentation is in English throughout.
 

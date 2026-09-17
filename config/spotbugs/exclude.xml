@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+
+    <!-- Lombok generates the getters and equals/hashCode for the recipe options. -->
+    <Match>
+        <Source name="~.*\.java"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- An OpenRewrite recipe returns its visitor as an anonymous class from getVisitor();
+         that is the framework's idiom. Naming them would not make the code clearer. -->
+    <Match>
+        <Class name="~de\.zettsystems\..*"/>
+        <Method name="getVisitor"/>
+        <Bug pattern="SIC_INNER_SHOULD_BE_STATIC_ANON"/>
+    </Match>
+
+</FindBugsFilter>

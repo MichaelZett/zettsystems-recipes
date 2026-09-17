@@ -27,3 +27,16 @@ description: >-
 recipeList:
   - de.zettsystems.UseToList:
       alsoChangeCollectorsToList: true
+---
+type: specs.openrewrite.org/v1beta/recipe
+name: de.zettsystems.ZettSystemsRecipes
+displayName: All ZettSystems recipes
+description: >-
+  Every recipe in this library that is a pure refactoring: modern `toList()`, an explicit locale on
+  case conversions, and the AssertJ `asInstanceOf` fix. `de.zettsystems.UseFloorMod` and
+  `de.zettsystems.UseToListTrue` are deliberately left out — both change behaviour and want a look
+  at the diff.
+recipeList:
+  - de.zettsystems.UseToList
+  - de.zettsystems.UseLocaleWithCaseConversion
+  - de.zettsystems.FixAssertJThrowableInstanceOf

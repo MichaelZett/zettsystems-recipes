@@ -23,8 +23,9 @@ dependencies {
 
 rewrite {
     activeRecipe('org.openrewrite.java.migrate.UpgradeToJava17')
-    // Ships with the recipe artifact; no local rewrite.yml needed.
+    // Both ship with the recipe artifact; no local rewrite.yml needed.
     activeRecipe('de.zettsystems.UseToListTrue')
+    activeRecipe('de.zettsystems.UseLocaleWithCaseConversion')
 }
 
 java {

@@ -204,6 +204,28 @@ class UseToListTest implements RewriteTest {
     }
 
     @Test
+    void keepsCollectWithACollectorFromAVariable() {
+        rewriteRun(
+          // language=java
+          java(
+            """
+              import java.util.List;
+              import java.util.stream.Collector;
+              import java.util.stream.Collectors;
+              import java.util.stream.Stream;
+
+              class Test {
+                  List<String> names() {
+                      Collector<String, ?, List<String>> collector = Collectors.toUnmodifiableList();
+                      return Stream.of("test").collect(collector);
+                  }
+              }
+              """
+          )
+        );
+    }
+
+    @Test
     void keepsTheFormattingOfAChainedCall() {
         rewriteRun(
           // language=java

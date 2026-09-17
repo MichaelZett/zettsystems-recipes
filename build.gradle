@@ -1,9 +1,34 @@
+import net.ltgt.gradle.errorprone.CheckSeverity
+
 plugins {
     id 'java-library'
+    id 'jacoco'
     id 'signing'
     id 'com.vanniktech.maven.publish' version "${vanniktechPublishVersion}"
     id 'io.github.ben-manes.versions' version "${benManesVersionsVersion}"
+    id 'net.ltgt.errorprone' version "${errorproneGradleVersion}"
+    id 'net.ltgt.nullaway' version "${nullawayGradleVersion}"
+    id 'com.github.spotbugs' version "${spotbugsGradleVersion}"
+    id 'org.sonarqube' version "${sonarVersion}"
 }
+
+// ErrorProne-Checks, die als Sicherheitsnetz auf ERROR stehen.
+ext.errorproneEnforcedChecks = [
+        'ArrayRecordComponent',
+        'EmptyCatch',
+        'EqualsGetClass',
+        'FutureReturnValueIgnored',
+        'InlineFormatString',
+        'JavaTimeDefaultTimeZone',
+        'JdkObsolete',
+        'MissingOverride',
+        'MixedMutabilityReturnType',
+        'OperatorPrecedence',
+        'ReferenceEquality',
+        'StringSplitter',
+        'SuperCallToObjectMethod',
+        'UnnecessaryMethodReference',
+]
 
 repositories {
     mavenCentral()
@@ -18,6 +43,16 @@ java {
     }
 }
 
+jacoco {
+    toolVersion = "${jacocoVersion}"
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
 dependencies {
     implementation platform("org.openrewrite.recipe:rewrite-recipe-bom:${rewriteRecipeBomVersion}")
     implementation 'org.openrewrite:rewrite-java'
@@ -25,10 +60,19 @@ dependencies {
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 
+    // JSpecify is the annotation vocabulary, NullAway the compile-time check.
+    // `compileOnly`, so consumers do not inherit it.
+    compileOnly "org.jspecify:jspecify:${jspecifyVersion}"
+    testCompileOnly "org.jspecify:jspecify:${jspecifyVersion}"
+
+    errorprone "com.google.errorprone:error_prone_core:${errorproneCoreVersion}"
+    errorprone "com.uber.nullaway:nullaway:${nullawayCoreVersion}"
+
     testImplementation('org.openrewrite:rewrite-test') {
         exclude group: 'org.slf4j', module: 'slf4j-nop'
     }
     testImplementation "org.junit.jupiter:junit-jupiter:${junitJupiterVersion}"
+    testImplementation "org.assertj:assertj-core:${assertjVersion}"
 
     // Parsers for the Java versions the test fixtures are written in.
     testRuntimeOnly 'org.openrewrite:rewrite-java-17'
@@ -46,7 +90,107 @@ tasks.named('test') {
 }
 
 tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
     options.compilerArgs << '-Xlint:deprecation'
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// ------------------------------------------------------ static analysis
+
+tasks.named('compileJava') {
+    options.errorprone {
+        disableWarningsInGeneratedCode = true
+        nullaway {
+            severity = CheckSeverity.ERROR
+            annotatedPackages.add('de.zettsystems')
+        }
+        project.ext.errorproneEnforcedChecks.each { check -> error(check) }
+    }
+}
+
+// Test sources are recipe fixtures: text blocks of deliberately unidiomatic Java.
+tasks.named('compileTestJava') {
+    options.errorprone.enabled = false
+}
+
+spotbugs {
+    effort = com.github.spotbugs.snom.Effort.valueOf('MAX')
+    reportLevel = com.github.spotbugs.snom.Confidence.valueOf('LOW')
+    excludeFilter = file('config/spotbugs/exclude.xml')
+}
+
+tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
+    reports {
+        html {
+            required = true
+            outputLocation = layout.buildDirectory.file("reports/spotbugs/${name}.html")
+        }
+        sarif {
+            required = true
+            outputLocation = layout.buildDirectory.file("reports/spotbugs/${name}.sarif")
+        }
+        xml.required = false
+    }
+}
+
+// SpotBugs on test code is almost only noise here.
+tasks.named('spotbugsTest') {
+    enabled = false
+}
+
+jacocoTestReport {
+    dependsOn tasks.named('test')
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn tasks.named('jacocoTestReport')
+    // The branches left uncovered are defensive guards a recipe cannot be fed from
+    // valid Java: a method invocation without a receiver, an untyped expression.
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.95
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.85
+            }
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('jacocoTestReport')
+    dependsOn tasks.named('jacocoTestCoverageVerification')
+}
+
+sonar {
+    properties {
+        property 'sonar.projectKey', 'zettsystems-recipes'
+        property 'sonar.projectName', 'zettsystems-recipes'
+        property 'sonar.host.url', 'http://localhost:9000'
+        def sonarTokenValue = findProperty('sonar.token') ?: System.getenv('SONAR_TOKEN')
+        if (sonarTokenValue) {
+            property 'sonar.token', sonarTokenValue
+        }
+        // java:S2699 wants an assertion per test. OpenRewrite's `rewriteRun(...)` is the
+        // assertion — it compares the rewritten source against the expected one and fails
+        // the test itself — but Sonar does not know the method, so every recipe test is
+        // flagged. Nothing else in this project uses assertion-free tests.
+        property 'sonar.issue.ignore.multicriteria', 's2699'
+        property 'sonar.issue.ignore.multicriteria.s2699.ruleKey', 'java:S2699'
+        property 'sonar.issue.ignore.multicriteria.s2699.resourceKey', '**/*Test.java'
+    }
 }
 
 tasks.named('jar') {

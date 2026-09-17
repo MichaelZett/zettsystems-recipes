@@ -41,8 +41,9 @@
                 <configuration>
                     <activeRecipes>
                         <recipe>org.openrewrite.java.migrate.UpgradeToJava17</recipe>
-                        <!-- Ships with the recipe artifact; no local rewrite.yml needed. -->
+                        <!-- Both ship with the recipe artifact; no local rewrite.yml needed. -->
                         <recipe>de.zettsystems.UseToListTrue</recipe>
+                        <recipe>de.zettsystems.UseLocaleWithCaseConversion</recipe>
                     </activeRecipes>
                 </configuration>
                 <dependencies>

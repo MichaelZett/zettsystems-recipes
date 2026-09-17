@@ -35,6 +35,12 @@ public class UseFloorMod extends Recipe {
     private static final MethodMatcher MATH_ABS_INT = new MethodMatcher("java.lang.Math abs(int)");
     private static final MethodMatcher MATH_ABS_LONG = new MethodMatcher("java.lang.Math abs(long)");
 
+    /**
+     * Creates the recipe; it takes no options.
+     */
+    public UseFloorMod() {
+    }
+
     @Override
     public String getDisplayName() {
         //language=markdown

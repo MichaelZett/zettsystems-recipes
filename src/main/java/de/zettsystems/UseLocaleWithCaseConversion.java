@@ -36,6 +36,12 @@ public class UseLocaleWithCaseConversion extends Recipe {
     private static final MethodMatcher TO_UPPER_CASE = new MethodMatcher("java.lang.String toUpperCase()");
     private static final String LOCALE = "java.util.Locale";
 
+    /**
+     * Creates the recipe; it takes no options.
+     */
+    public UseLocaleWithCaseConversion() {
+    }
+
     @Override
     public String getDisplayName() {
         //language=markdown

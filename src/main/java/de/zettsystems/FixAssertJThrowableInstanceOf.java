@@ -38,6 +38,12 @@ public class FixAssertJThrowableInstanceOf extends Recipe {
     private static final MethodMatcher THROWABLE_FACTORY = new MethodMatcher(
             "org.assertj.core.api.InstanceOfAssertFactories throwable(java.lang.Class)");
 
+    /**
+     * Creates the recipe; it takes no options.
+     */
+    public FixAssertJThrowableInstanceOf() {
+    }
+
     @Override
     public String getDisplayName() {
         //language=markdown

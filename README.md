@@ -1,5 +1,8 @@
 # zettsystems-recipes
 
+[![Build](https://github.com/MichaelZett/zettsystems-recipes/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/MichaelZett/zettsystems-recipes/actions/workflows/ci.yml?query=branch%3Amaster)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=MichaelZett_zettsystems-recipes&metric=alert_status)](https://sonarcloud.io/project/overview?id=MichaelZett_zettsystems-recipes)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=MichaelZett_zettsystems-recipes&metric=coverage)](https://sonarcloud.io/component_measures?id=MichaelZett_zettsystems-recipes&metric=coverage)
 [![Maven Central](https://img.shields.io/maven-central/v/de.zettsystems/zettsystems-recipes.svg)](https://central.sonatype.com/artifact/de.zettsystems/zettsystems-recipes)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 

@@ -17,6 +17,9 @@
 #   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD  publisher token from the portal
 #   SIGNING_KEY                                      `gpg --export-secret-keys --armor`
 #   SIGNING_PASSWORD                                 passphrase of that key
+#
+# Optional: SONAR_TOKEN (secret) plus SONAR_ORGANIZATION (variable) turn on the
+# SonarQube Cloud analysis.
 name: ci
 
 on:
@@ -29,6 +32,9 @@ on:
     branches:
       - master
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   GRADLE_OPTS: '-Dorg.gradle.jvmargs="-Xmx2048m -XX:+HeapDumpOnOutOfMemoryError"'
@@ -47,7 +53,7 @@ jobs:
           fetch-depth: 0
 
       - name: validate-gradle-wrapper
-        uses: gradle/actions/wrapper-validation@v6
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb  # v6.3.0
 
       - name: set-up-jdk
         uses: actions/setup-java@v6
@@ -60,6 +66,28 @@ jobs:
         # `build` runs the tests plus ErrorProne/NullAway, SpotBugs and the JaCoCo thresholds.
         run: ./gradlew ${GRADLE_SWITCHES} build
 
+      # Reuses what the build just produced (classes, test results, the JaCoCo
+      # XML report). Dormant without SONAR_TOKEN: a fork's pull request never
+      # sees secrets, and neither does anyone who clones this repository.
+      - name: sonar
+        if: env.SONAR_TOKEN != ''
+        run: ./gradlew ${GRADLE_SWITCHES} sonar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+
+      # Counts, failures and durations on the run's summary page, every run.
+      # annotate_only keeps it off the Checks API, so contents: read suffices.
+      - name: test-summary
+        if: always()
+        uses: mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d  # v6.5.0
+        with:
+          report_paths: 'build/test-results/test/TEST-*.xml'
+          annotate_only: true
+          detailed_summary: true
+          include_time_in_summary: true
+
+      # Only worth opening while the run is recent.
       - name: upload-reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -69,7 +97,8 @@ jobs:
             build/reports/tests/
             build/reports/spotbugs/
             build/reports/jacoco/
-          retention-days: 7
+          retention-days: 3
+          if-no-files-found: ignore
 
       - name: version
         id: version

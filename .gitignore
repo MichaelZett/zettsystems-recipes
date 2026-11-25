@@ -2,3 +2,6 @@ build/
 .gradle/
 .idea/
 out/
+
+# Eigene Eingabeordner des Users
+_input*/
